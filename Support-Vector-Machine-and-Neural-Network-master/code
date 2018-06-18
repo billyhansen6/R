@@ -1,0 +1,222 @@
+Can I eat this mushroom?
+
+## A machine learning project using support vector machine and neural network methods.
+
+#### For this project we'll work with the mushroom data set located at http://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/. The following description of the data set is given at the website:
+
+####   This data set includes descriptions of hypothetical samples corresponding to 23 species of gilled mushrooms in the Agaricus and Lepiota Family (pp. 500-525).  Each species is identified as definitely edible, definitely poisonous, or of unknown edibility and not recommended.  This latter class was combined with the poisonous one.  The Guide clearly states that there is no simple rule for determining the edibility of a mushroom; no rule like ``leaflets three, let it be'' for Poisonous Oak and Ivy.
+
+#### We'll first load the data into R.
+
+mushroom <- read.csv(url("http://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data"), header = FALSE, sep = ",")
+
+str(mushroom)
+
+
+#### Next we should add attribute names to the dataset. 
+
+
+colnames(mushroom) <- c("edibility", "cap_shape", "cap_surface", "cap_color", "bruises", "odor", "grill_attachment", "grill_spacing", "grill_size", "grill_color", "stalk_shape", "stalk_root", "stalk_surface_above_ring", "stalk_surface_below_ring", "stalk_color_above_ring", "stalk_color_below_ring", "veil_type", "veil_color", "ring_number", "ring_type", "spore_print_color", "population", "habitat")
+
+head(mushroom)
+
+sum(is.na(mushroom))
+
+
+#### Because veil_type is a factor with only one level, we'll remove it from the data set.
+
+
+mushroom <- subset(mushroom, select = -veil_type)
+
+
+
+
+
+#### Let's now change all the factor variables to numeric variables so the SVM can run.
+
+
+mushroom$cap_shape <- as.numeric(mushroom$cap_shape)
+mushroom$cap_surface <- as.numeric(mushroom$cap_surface)
+mushroom$cap_color <- as.numeric(mushroom$cap_color)
+mushroom$bruises <- as.numeric(mushroom$bruises)
+mushroom$odor <- as.numeric(mushroom$odor)
+mushroom$grill_attachment <- as.numeric(mushroom$grill_attachment)
+mushroom$grill_spacing <- as.numeric(mushroom$grill_spacing)
+mushroom$grill_size <- as.numeric(mushroom$grill_size)
+mushroom$grill_color <- as.numeric(mushroom$grill_color)
+mushroom$stalk_shape <- as.numeric(mushroom$stalk_shape)
+mushroom$stalk_root <- as.numeric(mushroom$stalk_root)
+mushroom$stalk_surface_above_ring <- as.numeric(mushroom$cap_shape)
+mushroom$stalk_surface_below_ring <- as.numeric(mushroom$cap_shape)
+mushroom$stalk_color_above_ring <- as.numeric(mushroom$stalk_color_above_ring)
+mushroom$stalk_color_below_ring <- as.numeric(mushroom$stalk_color_below_ring)
+mushroom$veil_color <- as.numeric(mushroom$veil_color)
+mushroom$ring_number <- as.numeric(mushroom$ring_number)
+mushroom$ring_type <- as.numeric(mushroom$ring_type)
+mushroom$spore_print_color <- as.numeric(mushroom$spore_print_color)
+mushroom$population <- as.numeric(mushroom$population)
+mushroom$habitat <- as.numeric(mushroom$habitat)
+
+
+sauce <- as.numeric(mushroom$edibility)
+hist(sauce)
+
+
+
+
+4208/8124
+3916/8124
+
+
+#### As shown above, approx. 52% of the mushroom entries in the mushroom data set are edible, and approx.. 48% are poisonous (or unclear and not definitely safe to eat).
+
+#### Our first objective is to build a classifier using a support vector machine. We'll experiment with different kernels and compare the accuracy. We should first split the data into training and testing sets. We'll use 70% of the data for training, and save 30% for testing.
+
+
+.7 * 8124
+
+
+.3 * 8124
+
+
+
+
+s <- sample(8124, 5687)
+mush_train <- mushroom[s, ]
+mush_test <- mushroom[-s, ]
+
+dim(mush_train)
+dim(mush_test)
+
+
+#### Let's build the first model using the svm function from the e1071 package.
+
+
+install.packages("e1071")
+
+
+str(mush_train)
+
+
+library(e1071)
+
+
+svm_model <- svm(edibility ~ ., data = mush_train, kernel = 'linear', cost = 1, scale = FALSE)
+
+
+print(svm_model)
+
+
+
+#### The model created 994 support vectors for the SVM.
+
+library(gamlss)
+
+
+
+#### Let's see how accurate the model is in predicting the unseen data.
+
+svm.pred = predict(svm_model, mush_test[, !names(mush_test) %in% c("edibility")])
+
+svm.table = table(svm.pred, mush_test$edibility)
+
+svm.table
+
+
+1193 + 1153
+1193 + 1153 + 52 + 39
+
+2346/2437
+
+
+#### This model predicted the edibility with 96% accuracy. Let's tamper with the model and see if we can improve it. 
+
+
+svm2 <- svm(edibility ~ ., data = mush_train, kernel = 'linear', cost = 100, scale = FALSE)
+
+svm.pred2 = predict(svm2, mush_test[, !names(mush_test) %in% c("edibility")])
+
+svm.table2 = table(svm.pred2, mush_test$edibility)
+svm.table2
+
+
+(1198+1181)/2437
+
+
+#### This model with the cost changed to "100" increased to approx. 97.6% accuracy. Let's also try a different kernel and the same parameters.
+
+
+svm3 <- svm(edibility ~ ., data = mush_train, kernel = 'radial', cost = 100, scale = FALSE)
+
+
+svm.pred3 = predict(svm3, mush_test[, !names(mush_test) %in% c("edibility")])
+
+svm.table3 = table(svm.pred3, mush_test$edibility)
+svm.table3
+
+
+#### The radial SVM predicted the test set edibility labels with 100% accuracy. Because there's no way of improving on 100% accuracy, let's now move on to neural network algorithms.
+
+
+Neural Network
+
+#### First we load the data and add column names again. This time I'm going to delete both "veil_type" and "stalk_root". "veil_type" has only one level and "stalk_root" has too many missing values.
+
+mushroom <- read.csv(url("http://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data"), header = FALSE, sep = ",")
+
+
+colnames(mushroom) <- c("edibility", "cap_shape", "cap_surface", "cap_color", "bruises", "odor", "grill_attachment", "grill_spacing", "grill_size", "grill_color", "stalk_shape", "stalk_root", "stalk_surface_above_ring", "stalk_surface_below_ring", "stalk_color_above_ring", "stalk_color_below_ring", "veil_type", "veil_color", "ring_number", "ring_type", "spore_print_color", "population", "habitat")
+
+mushroom <- subset(mushroom, select = -veil_type)
+mushroom <- subset(mushroom, select = -stalk_root)
+
+
+#### Next we transform the factors into dummy variables and create training and testing sets for the data.
+
+library(caret)
+swag <- createDataPartition(mushroom$edibility, p = .7, list = FALSE)
+
+
+dummy <- subset(mushroom, select = -edibility)
+shroomDummy <- dummyVars(~., data = dummy, sep = ".")
+shroomDummy <- data.frame(predict(shroomDummy, dummy))
+ncol(shroomDummy)
+
+
+shroomDummy$edibility <- mushroom$edibility
+ncol(shroomDummy)
+
+train <- shroomDummy[swag,]
+test <- shroomDummy[-swag,]
+testLabels <- subset(test, select = edibility)
+testset <- subset(test, select = -edibility)
+
+library(nnet)
+?nnet
+
+
+net <- nnet(edibility ~ ., data = train, size = 2, rang = 0.1, maxit = 200)
+
+
+summary(net)
+
+shroom.predict <- predict(net, testset, type = "class")
+
+net.table <- table(test$edibility, shroom.predict)
+net.table
+
+confusionMatrix(net.table)
+
+#### As shown above, the accuracy of the neural network using the nnet() function was approx. 98%.
+
+
+
+install.packages("gamlss.add")
+
+library(gamlss.add)
+
+plot(net, .3)
+
+
+
+
