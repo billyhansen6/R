@@ -1,0 +1,256 @@
+---
+title: "Evaluating Performance Measures"
+output: html_notebook
+---
+
+The objective of this assignment is to compare two different classification algorithms using accuracy and performance metrics. I'm going to use K-NN and Naive Bayes to to predict the age of an abalone using abalone features. Abalone are shell fish that are popular to eat in many countries, especially raw in a sashimi spread. The rings attribute corresponds to an abalone's age in years (after the abalone reaches 1 to 1.5 years of age). The process of determining an abalone's age is tedious and time consuming, so using classification machine learning might be useful for predicting an abalone's age.
+
+Data was taken from this website https://archive.ics.uci.edu/ml/datasets/Abalone
+
+Here are the attribute descriptions:
+
+Sex / nominal / -- / M, F, and I (infant) 
+Length / continuous / mm / Longest shell measurement 
+Diameter	/ continuous / mm / perpendicular to length 
+Height / continuous / mm / with meat in shell 
+Whole weight / continuous / grams / whole abalone 
+Shucked weight / continuous	/ grams / weight of meat 
+Viscera weight / continuous / grams / gut weight (after bleeding) 
+Shell weight / continuous / grams / after being dried 
+Rings / integer / -- / +1.5 gives the age in years
+
+```{r}
+x <- c(5, 4)
+```
+
+
+```{r}
+ abalone <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"), header = FALSE, sep = ",")
+
+colnames(abalone) <- c("sex", "length", 'diameter', 'height', 'whole_weight', 'shucked_wieght', 'viscera_wieght', 'shell_weight', 'rings' )
+```
+
+
+```{r}
+summary(abalone)
+```
+
+```{r}
+str(abalone)
+```
+
+
+
+```{r}
+summary(abalone$rings)
+```
+
+As shown above, the "rings" variable has a range between 1-29. This is the variable that we want to predict, and predicting this many levels might not give us the insight we're looking for. I suspect that there's an optimal age range for harvesting abalones for consumption. While I don't know this age range, this project could be adjusted with the sought-after age range inserted. For now, we'll break the rings variable into 3 levels" "young" for abalones less than 8, "adult" for abalones between 8-11, and "old" for abalones older than 11. 
+
+```{r}
+abalone$rings <- as.numeric(abalone$rings)
+
+abalone$rings <- cut(abalone$rings, br=c(-1,8,11,35), labels = c("young", 'adult', 'old'))
+
+
+abalone$rings <- as.factor(abalone$rings)
+
+summary(abalone$rings)
+```
+
+
+I'm going to create a couple of different classification models, and then compare them using accuracy and performance metrics. I'll start with a KNN classification algorithm. Because KNN requires all numeric variables for prediction, I'm going to remove the "sex" variable.
+
+
+```{r}
+z <- abalone
+z$sex <- NULL
+```
+
+I'll now normalize the data using min max normalization
+
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+z[1:7] <- as.data.frame(lapply(z[1:7], normalize))
+
+
+summary(z$shucked_wieght)
+```
+
+
+
+Now each variable has a min of 0 and a max of 1. We'll now split the data into training and testing sets.
+
+```{r}
+ind <- sample(2, nrow(z), replace=TRUE, prob=c(0.7, 0.3))
+KNNtrain <- z[ind==1,]
+KNNtest <- z[ind==2,]
+```
+
+Now we run the model. I'm going to make k equal to the square root of 2918, the number of observations in the training set.
+
+
+```{r}
+library(class)
+KNNpred <- knn(train = KNNtrain[1:7], test = KNNtest[1:7], cl = KNNtrain$rings, k = 54)
+```
+
+
+
+Let's see how the model does on the test data.
+
+```{r}
+library("gmodels")
+CrossTable(x = KNNtest$rings, y = KNNpred, prop.chisq = FALSE)
+```
+```{r}
+(328+451+97)/((84+2+26+91+21+159)+(328+451+97))
+```
+
+This KNN classifier predicted the abalone age with 69% accuracy - likely not accurate enough for an abalone harvester to trust. Before moving on to more specific accuracy and performance tests I'm going to try a smaller k value and see if it improves the accuracy.
+
+
+```{r}
+library(class)
+KNNpred <- knn(train = KNNtrain[1:7], test = KNNtest[1:7], cl = KNNtrain$rings, k = 10)
+```
+
+```{r}
+library("gmodels")
+CrossTable(x = KNNtest$rings, y = KNNpred, prop.chisq = FALSE)
+```
+
+```{r}
+(313+422+135)/((313+422+135)+(94+7+57+89+17+125))
+```
+
+
+This model has just about the same predictive power on the test set. This can also be shown in the confusion matrix below:
+
+
+```{r}
+library(caret)
+confusionMatrix(KNNpred, KNNtest$rings)
+```
+
+The misclassification rate is 1 minus the accuracy, shown below.
+
+```{r}
+1-0.691
+```
+
+
+Let’s now create a naive bayes classifier for the same data.
+
+
+```{r}
+NBtrain <- KNNtrain
+NBtest <- KNNtest
+```
+
+```{r}
+library(e1071)
+```
+
+```{r}
+model <- naiveBayes(rings ~., data = NBtrain)
+model
+```
+
+```{r}
+pred <- predict(model, NBtest)
+print(confusionMatrix(pred,NBtest$rings))
+```
+
+
+The accuracy rate for the naive bayes model predicting the test set is only about 59%, which makes the misclassification rate approx. 41%.
+
+While it's likely that neither algorithm is adequate for predicting the abalone age, the KNN model is more accurate so far.
+
+Let's try a bootstrapping method for further model evaluation.
+
+```{r}
+library(caret)
+train_control <- trainControl(method='boot', number = 100)
+
+trModel <- train(rings~., data = z, trControl=train_control, method="nb")
+```
+
+
+```{r}
+print(trModel)
+```
+
+```{r}
+trModel2 <- train(rings~., data = z, trControl=train_control, method="knn")
+```
+
+```{r}
+print(trModel2)
+```
+
+
+The bootstrapping method indicates that the KNN model might be slightly more accurate for classifying the data. It was also estimated that the most effective k value for the KNN model would be 9. We used 10 for our model.
+
+Let's now do 10-fold cross validation to evaluate the models.
+
+```{r}
+control = trainControl(method="repeatedcv", number=10, repeats=3)
+model5 <- train(rings~., data = trainDF, method = "knn", preProcess="scale", trControl=control)
+model5
+```
+
+
+```{r}
+control11 = trainControl(method="repeatedcv", number=10, repeats=3)
+model6 <- train(rings~., data = trainDF, method = "nb", preProcess="scale", trControl=control11)
+model6
+```
+
+
+The 10-fold cross validation method indicates that the optimal model for KNN is one with k = 9 (same as what the bootstrap method predicted).
+
+The 10-fold cross validation method indicates that the optimal model for Naive Bayes is a model with fL = 0, usekernal = TRUE and adjust = 1.
+
+
+The cross-validation method confirms that the KNN method is more effective for this data set than Naive Bayes.
+
+Let's create the new models with the suggested parameters.
+```{r}
+library(class)
+KNNpred <- knn(train = KNNtrain[1:7], test = KNNtest[1:7], cl = KNNtrain$rings, k = 9)
+library(caret)
+confusionMatrix(KNNpred, KNNtest$rings)
+```
+
+With k = 9 the model was about 69% accurate in predicting the test data set.
+
+
+```{r}
+library(e1071)
+```
+
+```{r}
+model <- naiveBayes(rings ~., data = NBtrain, fL = 0, usekernal = TRUE, adjust = 1)
+model
+```
+
+```{r}
+pred <- predict(model, NBtest)
+print(confusionMatrix(pred,NBtest$rings))
+```
+
+With the suggested parameters given from the 10-fold validation, the naive bayes algorithm is about 59% accurate.
+
+The models trained by the 10-fold validation have almost equal accuracy to the models I originally created, when testing on the test data set. My concern with this project is that the parameters I originally used didn't differ much from the suggested model in 10-fold validation. 
+
+```{r}
+control14 = trainControl(method="repeatedcv", number=10, repeats=3)
+model7 <- train(rings~., data = trainDF, method = "rf", preProcess="scale", trControl=control14)
+model7
+```
+
+As shown above, the optimal random forest model is expected to perform at about 67%. It seems like the machine learning algorithms are having a difficult learning enough from the abalone features to accurately predict the age of the abalone. I would suspect that an abalone harvester would want a more accurate model before he or she could trust it in a commercial setting. Therefore, better data might be necessary.
