@@ -1,0 +1,236 @@
+"Decision Trees and Random Forests with R"
+
+#### The objective of this assignment is to predict wine quality based on chemical properties in wine. This would allow vineyards to save money and time using taste testers to evaluate wine quality.
+
+#### First we'll upload the data and explore what it looks like.
+
+```{r}
+setwd("~/Desktop/R")
+wine <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"), header = TRUE, sep = ";")
+```
+
+
+```{r}
+str(wine)
+table(wine$quality)
+```
+
+#### The data set contains 1599 observations of 12 variables. 11 variables are numeric, and the wine quality variable is an integer rating - all wines are rated as an integer ranging from 3 to 8. 
+
+```{r}
+names(wine)
+sum(is.na(wine))
+```
+
+#### The names look sufficient, and there are 0 na values. Let's change the predictor variable "quality" to a factor.
+
+```{r}
+wine$quality <- as.factor(wine$quality)
+str(wine$quality)
+```
+
+#### Before we split the data, let's first look at a histogram of the frequency of wine quality ratings. It should be noted that the levels of the histogram don't represent the integers in the data frame, but instead the 6 levels that're used.
+
+```{r}
+sauce <- as.numeric(wine$quality)
+
+hist(sauce)
+
+```
+
+#### The majority of ratings are levels 3 and 4, which would be ratings 5 and 6 in the data frame.
+
+
+#### For this project, we'll first use the decision tree classification method for classifying wine into the 6 levels based on its properties. We'll use the rpart() library to classify. The first step is to split the data into training and testing sets. To be safe, we'll randomize these samples. Let's use 80% of the data for training and 20% for testing.
+
+```{r}
+.8 * 1599
+```
+
+```{r}
+s <- sample(1599, 1279)
+wine_train <- wine[s, ]
+wine_test <- wine[-s, ]
+
+dim(wine_train)
+dim(wine_test)
+
+```
+
+#### We now have two randomized samples of the data. Let's create the decision tree model using rpart().
+
+```{r}
+install.packages("rpart")
+library(rpart)
+```
+
+
+```{r}
+tm <- rpart(quality~., wine_train, method = "class")
+```
+
+
+#### Now to inspect the result using rpart.plot(), and the tweak command to increase the font size. Be sure to expand the graph so it can be viewed with greater clarity. 
+
+```{r}
+install.packages("rpart.plot")
+library(rpart.plot)
+```
+
+```{r}
+rpart.plot(tm, tweak = 1.6)
+```
+
+#### In this graph, yes is always to the left and no is always to the right. So, each branch is a decision for splitting the data into a new classification. The decision tree split the data into only 3 of the 6 available classifications: 5, 6 and 7. Let's create another graph with more detail.
+
+```{r}
+rpart.plot(tm, type = 4, extra = 101, tweak = 1.6)
+```
+
+
+#### The furthest branches show that the this prediction made a considerable amount of errors. Let's go on to test its prediction on the unseen data.
+
+
+```{r}
+
+pred <- predict(tm, wine_test, type = "class")
+table(wine_test$quality, pred)
+```
+
+
+```{r}
+install.packages("caret")
+```
+
+
+
+```{r}
+library(caret)
+confusionMatrix(table(pred, wine_test$quality))
+```
+
+
+#### As shown above, the predictions were only 64.06% accurate, which isn't very good. Let's try a random forest approach. My approach will be guided by the following blog https://www.r-bloggers.com/predicting-wine-quality-using-random-forests/, with some changes as I see fit.
+
+#### For our random forest model, let's also redefine our quality ranking and reduce the number of levels. For this I'm going to reload the data in its original form.
+
+```{r}
+setwd("~/Desktop/R")
+wine2 <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"), header = TRUE, sep = ";")
+```
+
+#### Let's look again at the distribution of wine rankings, this time with a bar plot.
+
+```{r}
+barplot(table(wine2$quality))
+```
+
+
+#### I'd like to classify the wines ranked as 5 and 6 as "normal", the lower ranked wines as "bad", and the wines ranked above as "good".
+
+```{r}
+wine2$taste <- ifelse(wine2$quality < 5, "bad", "good")
+wine2$taste[wine2$quality == 5] <- "normal"
+wine2$taste[wine2$quality == 6] <- "normal"
+wine2$taste <- as.factor(wine2$taste)
+str(wine2$taste)
+barplot(table(wine2$taste))
+```
+
+```{r}
+table(wine2$taste)
+```
+
+
+#### As seen above, there are a lot more normal wines in the dataset then there are bad or good. In a real world example, a company might be more concerned with these simplified classifications than classifying precise integer ratings.
+
+#### We can now proceed to splitting our data into training and testing sets. We'll use 80% for testing again for the random forest approach.
+
+```{r}
+samp <- sample(1599, 1279)
+wine_train2 <- wine2[samp, ]
+wine_test2 <- wine2[-samp, ]
+
+dim(wine_train2)
+dim(wine_test2)
+```
+
+```{r}
+library(randomForest)
+model <- randomForest(taste ~ . - quality, data = wine_train2)
+```
+
+```{r}
+model
+```
+
+#### We can now test our model on the remaining data.
+
+```{r}
+prediction <- predict(model, newdata = wine_test2)
+table(prediction, wine_test2$taste)
+```
+
+```{r}
+(0 + 21 + 260) / nrow(wine_test2)
+```
+
+
+
+#### As seen above, our model was approx. 88% accurate - a major improvement from our decision tree. 
+
+
+#### I'd like to try one more random forest, and make the prediction more difficult for the algorithm. I'm now going to consider the integer rating of wine "5" as "bad" instead of "normal". And I'm only going to use 60% of the data to train the algorithm.
+
+
+```{r}
+wine3 <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"), header = TRUE, sep = ";")
+
+wine3$taste <- ifelse(wine3$quality < 6, "bad", "good")
+wine3$taste[wine3$quality == 6] <- "normal"
+wine3$taste <- as.factor(wine3$taste)
+str(wine3$taste)
+barplot(table(wine3$taste))
+
+```
+
+```{r}
+table(wine3$taste)
+```
+
+
+#### This changes the distribution drastically.
+
+
+```{r}
+.6 * 1599
+```
+
+```{r}
+samp2 <- sample(1599, 960)
+wine_train3 <- wine2[samp2, ]
+wine_test3 <- wine2[-samp2, ]
+
+dim(wine_train3)
+dim(wine_test3)
+```
+
+
+```{r}
+library(randomForest)
+model2 <- randomForest(taste ~ . - quality, data = wine_train3)
+model2
+```
+
+
+```{r}
+prediction2 <- predict(model2, newdata = wine_test3)
+table(prediction2, wine_test3$taste)
+```
+
+```{r}
+(2 + 44 + 524) / nrow(wine_test3)
+```
+
+
+#### This model predicted the wine classification at a rate of approx. 89%. This is an impressive algorithm.
