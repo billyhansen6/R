@@ -1,0 +1,536 @@
+---
+title: "K-Means and HCA"
+output: html_notebook
+---
+
+---
+title: "K-Means and HCA Machine Learning"
+output: html_notebook
+---
+
+The objective is to draw insights from the Whole Sale Customer data set located here: https://archive.ics.uci.edu/ml/datasets/wholesale+customers#
+
+This project will be guided by examples in the "Machine Learning in R Cookbook".
+
+We'll use methods of K-Means clustering and Hierarchical clustering analysis.
+
+The first step is to load the data into R.
+
+```{r}
+customers <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/00292/Wholesale%20customers%20data.csv"), header = TRUE, sep = ",")
+
+head(customers)
+```
+
+
+
+The attribute information taken from the website is the following:
+
+1)	FRESH: annual spending (m.u.) on fresh products (Continuous); 
+2)	MILK: annual spending (m.u.) on milk products (Continuous); 
+3)	GROCERY: annual spending (m.u.)on grocery products (Continuous); 
+4)	FROZEN: annual spending (m.u.)on frozen products (Continuous) 
+5)	DETERGENTS_PAPER: annual spending (m.u.) on detergents and paper products (Continuous) 
+6)	DELICATESSEN: annual spending (m.u.)on and delicatessen products (Continuous); 
+7)	CHANNEL: customersâ€™ Channel - Horeca (Hotel/Restaurant/CafÃ©) or Retail channel (Nominal) 
+8)	REGION: customersâ€™ Region â€“ Lisnon, Oporto or Other (Nominal) 
+
+Some descriptive stats...
+
+
+```{r}
+summary(customers)
+```
+
+```{r}
+table(customers$Channel)
+```
+
+```{r}
+table(customers$Region)
+```
+
+```{r}
+sum(is.na(customers))
+```
+
+Because the region and channel variables are categorical, let's remove them from our analysis for now. They don't offer much insight on spending habits. We'll also change the channel and region variables to factors, in case we want to use them later in the analysis.
+
+```{r}
+customers$Region <- as.factor(customers$Region)
+customers$Channel <- as.factor((customers$Channel))
+```
+
+```{r}
+newCust <- customers
+newCust$Region <- NULL
+newCust$Channel <- NULL
+```
+
+
+Let's also normalize the data.
+
+```{r}
+normalize <- function(x) {
+    return ((x - min(x)) / (max(x) - min(x)))
+}
+newCust[1:6] <- as.data.frame(lapply(newCust[1:6], normalize))
+```
+
+```{r}
+summary(newCust)
+
+```
+
+As seen above, all of the values are now between 0 and 1. We can now trust that each variable will be weighted equally in our analysis. I.E we can equalize the spending on each product to see which products should be marketed to which customers. We'll also perform clusters without normalizing the data later in this project.
+
+
+Let's find optimal clusters for the given data set.
+
+```{r}
+clus <- 2:12
+set.seed(22)
+WSS <- sapply(clus, function(k) {
+  kmeans(newCust, centers = k)$tot.withinss
+})
+WSS
+```
+```{r}
+plot(clus, WSS, type = "l", xlab = "number of k", ylab = "within sum of squares")
+```
+
+
+Calculate the average silhouette width of various numbers of clusters.
+
+```{r}
+library(fpc)
+```
+
+
+```{r}
+sw = sapply(clus, function(k) {
+  cluster.stats(dist(newCust), kmeans(newCust, centers = k)$cluster)$avg.silwidth
+  })
+```
+
+```{r}
+sw
+```
+
+```{r}
+plot(clus, sw, type = "l", xlab = "number of clusters", ylab = "average cilhouette width")
+```
+
+
+The graph above indicates that that 2 clusters would be optimal.
+
+```{r}
+clus[which.max(sw)]
+```
+
+
+Let's create the two clusters.
+
+```{r}
+set.seed(22)
+fit = kmeans(newCust, 2)
+fit
+```
+
+
+```{r}
+barplot(t(fit$centers), beside = TRUE, xlab="cluster", ylab="value")
+```
+
+This indicates that the products "milk", "grocery" and "detergents_paper" are being purchased at a much higher rate from the customers in cluster 2.
+
+Let's check out what a cluster plot looks like of this data
+
+
+```{r}
+install.packages("cluster")
+```
+
+
+```{r}
+library(cluster)
+clusplot(newCust, fit$cluster, color = TRUE, shade = TRUE)
+
+
+```
+
+
+
+The clusters above contain one of size 394 and the other with the remaining 46 observations. These two clusters might not be optimal for drawing valuable insights, as it seemed to lump most of the data together into one cluster and then the remaining, scattered data into another. Let's try some other clustering methods and then tamper with our clusters if necessary.
+
+
+
+```{r}
+mds = cmdscale(dist(newCust), k = 2)
+plot(mds, col = fit$cluster)
+```
+
+
+
+From this graph we see that the data is split into two distinct groups. Let's see if the "region" and "channel" variables can be predicted by our clusters
+
+
+```{r}
+table(customers$Channel, fit$cluster)
+```
+
+
+```{r}
+table(customers$Region, fit$cluster)
+```
+
+
+These tables suggest that the clusters that were created based on the spending data are not indicative of what region or what channel the money was being spent at.
+
+Let's look at a correlation matrix to see how the variables are related in the original data set. 
+
+
+```{r}
+install.packages("Hmisc")
+```
+
+```{r}
+library(Hmisc)
+y <- rcorr(as.matrix(newCust))
+y
+```
+
+
+
+"Milk" and "Fresh" share a weak correlation. Let's see how they compare in the clusters we created.
+
+
+
+
+```{r}
+plot(newCust[c("Fresh", "Milk")], col = fit$cluster, cex = .5)
+points(fit$centers[,c("Fresh", "Milk")], col=5, pch="X")
+```
+
+
+
+As shown in the graph above, based on the clusters we created, there is a slight overlap between customers who purchase significant amount of milk and those who purchase a lot of Fresh produce. However, as the values increase for both milk and fresh produce respectively, the correlation becomes weaker. It is especially clear that those who purchase lots of fresh produce tend not to be in the market for milk. The bright "X" indicated the center of the cluster in this graph and in subsequent graphs in this assignment.
+
+
+```{r}
+plot(newCust[c("Detergents_Paper", "Grocery")], col = fit$cluster, cex = .5)
+points(fit$centers[,c("Detergents_Paper", "Grocery")], col=5, pch="X")
+```
+
+
+
+In this graph, we see that "Grocery" and "Detergents" variables are strongly correlated. It would be wise for the company to market both detergents_paper and grocery products to the observations shown in red. These customers tend to spend money on both of these products.
+
+
+
+Let’s look at the data again but this time let’s not normalize before we create clusters. This will let the most popular products take precedent.
+
+
+
+
+```{r}
+customers <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/00292/Wholesale%20customers%20data.csv"), header = TRUE, sep = ",")
+```
+
+
+
+
+
+
+```{r}
+customers$Region <- as.factor(customers$Region)
+customers$Channel <- as.factor((customers$Channel))
+```
+
+```{r}
+newCust <- customers
+newCust$Region <- NULL
+newCust$Channel <- NULL
+```
+
+
+
+```{r}
+clus <- 2:12
+set.seed(22)
+WSS <- sapply(clus, function(k) {
+  kmeans(newCust, centers = k)$tot.withinss
+})
+WSS
+```
+```{r}
+plot(clus, WSS, type = "l", xlab = "number of k", ylab = "within sum of squares")
+```
+
+
+
+```{r}
+library(fpc)
+```
+
+
+```{r}
+sw = sapply(clus, function(k) {
+  cluster.stats(dist(newCust), kmeans(newCust, centers = k)$cluster)$avg.silwidth
+  })
+```
+
+```{r}
+sw
+```
+
+```{r}
+plot(clus, sw, type = "l", xlab = "number of clusters", ylab = "average cilhouette width")
+```
+
+
+The graph above indicates that that 3 clusters would be optimal.
+
+```{r}
+clus[which.max(sw)]
+```
+
+
+Let's create the three clusters.
+
+```{r}
+set.seed(22)
+fit = kmeans(newCust, 3)
+fit
+```
+
+
+```{r}
+barplot(t(fit$centers), beside = TRUE, xlab="cluster", ylab="value")
+```
+
+As shown above, the fast majority of people who tended to shop for fresh produce were grouped in cluster 3. The company would be wise to market their fresh produce to group 3. The also might benefit from marketing their grocery products to the customers in group 2.
+
+
+
+
+```{r}
+library(cluster)
+clusplot(newCust, fit$cluster, color = TRUE, shade = TRUE)
+```
+
+
+
+The clusters above contain one of size 330, 50, and 60 for cluster 1, 2 and 3 respectively.
+
+
+
+```{r}
+mds = cmdscale(dist(newCust), k = 2)
+plot(mds, col = fit$cluster)
+```
+
+
+
+Let's see if this clustering can predict region and channel. I sort of doubt that these variables are related.
+
+
+```{r}
+table(customers$Channel, fit$cluster)
+```
+
+
+```{r}
+table(customers$Region, fit$cluster)
+```
+
+
+These tables also suggest that the clusters that were created based on the spending data are not indicative of what region or what channel the money was being spent at.
+
+Looking again at the correlation matrix, lets pick two variables with a very weak correlation.
+
+
+```{r}
+library(Hmisc)
+y <- rcorr(as.matrix(newCust))
+y
+```
+
+Let's look at another pair of products that have no correlation.
+
+
+```{r}
+plot(newCust[c("Detergents_Paper", "Milk")], col = fit$cluster, cex = .5)
+points(fit$centers[,c("Detergents_Paper", "Milk")], col=5, pch="X")
+```
+
+
+
+This graph doesn't seem to lead to much of any valuable insight.
+
+
+```{r}
+plot(newCust[c("Frozen", "Grocery")], col = fit$cluster, cex = .5)
+points(fit$centers[,c("Frozen", "Grocery")], col=5, pch="X")
+```
+
+It looks as though the people in the red cluster tend to buy groceries at a much higher rate than frozen foods.
+
+
+While there are many more explorations that we could perform on our clusters, lets shift gears to HCA clustering.
+
+
+
+HCA CLUSTERING
+
+First we load the data.
+
+```{r}
+data <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/00292/Wholesale%20customers%20data.csv"), header = TRUE, sep = ",")
+```
+
+Let's again remove the region and channel variables and we'll need to normalize the data.
+
+```{r}
+data$Channel <- NULL
+data$Region <-NULL
+```
+
+
+```{r}
+normalize <- function(x) {
+    return ((x - min(x)) / (max(x) - min(x)))
+}
+data[1:6] <- as.data.frame(lapply(data[1:6], normalize))
+```
+
+
+
+We'll use packages "NbClust" and "factoextra" to choose the optimal number of clusters for our HCA analysis.
+
+
+```{r}
+install.packages("NbClust")
+install.packages("factoextra")
+```
+
+```{r}
+library(NbClust)
+library(factoextra)
+```
+
+For the first analysis we'll use ward.D2 linkage.
+
+
+```{r}
+nb <- NbClust(data, distance = "euclidean", min.nc = 2,
+              max.nc = 10, method = "ward.D2")
+```
+
+```{r}
+fviz_nbclust(nb)
+```
+
+As shown above, the optimal number of clusters is 3.
+
+
+
+
+```{r}
+hc = hclust(dist(data, method="euclidean"), method="ward.D2")
+hc
+```
+
+
+```{r}
+plot(hc, hang = -0.01, cex = 0.7)
+```
+
+We'll now cut the dentrogram into three clusters.
+
+```{r}
+fit <- cutree(hc, k = 3)
+table(fit)
+```
+
+
+As seen above, 310 of the observations are contained in cluster 1, 125 in cluster 2, and 5 in cluster 3.
+
+
+```{r}
+plot(hc)
+rect.hclust(hc, k = 4, border = "red")
+```
+
+
+The clusters are shown above.
+
+Let's also create clusters with "single" linkage.
+
+```{r}
+nb2 <- NbClust(data, distance = "euclidean", min.nc = 2,
+              max.nc = 10, method = "single")
+```
+
+```{r}
+fviz_nbclust(nb2)
+```
+
+2 clusters is optimal for this method.
+
+```{r}
+hc2 <- hclust(dist(data), method = "single")
+plot(hc2, hang = -.01, cex = .7)
+```
+
+
+```{r}
+hc2
+```
+
+```{r}
+fit2 <- cutree(hc2, k = 2)
+table(fit2)
+```
+
+
+As shown above, the single method didn’t do any meaningful clustering that we can work with. Let's analyze our ward.D2 linkage clusters instead.
+
+
+
+
+```{r}
+plot(hc)
+rect.hclust(hc, k = 4, border = "red")
+```
+
+
+
+
+```{r}
+fit5 <- cutree(hc, h = 3)
+table(fit5)
+```
+
+```{r}
+plot(hc)
+rect.hclust(hc, h = 3, border = "red")
+```
+
+
+
+
+
+```{r}
+fit5 <- cutree(hc, h = .5)
+table(fit5)
+```
+
+```{r}
+plot(hc)
+rect.hclust(hc, h = .5, border = "red")
+```
+
+
+
+Regardless of the where we choose to cut the dendrogram into clusters, there seem to just be too many observations. The dendrogram doesn't have much value when there are 440 customers all listed by a different number. Therefore, I think HCA would have more value on a smaller data set where the observations are distinguished by name. I'm also aware that my knowledge of how to build and edit dendrograms is limited, so perhaps there is a way to obtain more value from this data set using HCA.
