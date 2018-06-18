@@ -1,0 +1,192 @@
+#### The objective of this project is to predict heart disease in hospital patients. The processed.data.cleveland data set will be used for testing the KNN algorithm.
+
+#### First I'll import the dataset.
+
+Heart <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data"), header = FALSE)
+head(Heart)
+
+####  Insert column names into data.
+
+colnames(Heart) <- c("age","sex","cp","trestbps", "chol", "fbs", "restecg", "thalach", "exang", "oldpeak", "slope", "ca", "thal", "num")
+
+head(Heart)
+
+#### The attribute information is the following:
+
+#### age: age in years
+
+#### sex: gender( 1 = male; 0 = female)
+
+#### cp: chest pain type 
+
+#### -- Value 1: typical angina 
+
+#### -- Value 2: atypical angina 
+
+#### -- Value 3: non-anginal pain
+
+#### -- Value 4: asymptomatic 
+
+#### trestbps: resting blood pressure (in mm Hg on admission to the hospital) 
+
+#### chol: serum cholestoral in mg/dl 
+
+#### fbs: (fasting blood sugar > 120 mg/dl) (1 = true; 0 = false) 
+
+#### restecg: resting electrocardiographic results 
+
+#### -- Value 0: normal 
+
+#### -- Value 1: having ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV) 
+
+#### -- Value 2: showing probable or definite left ventricular hypertrophy by Estes' criteria 
+
+#### thalach: maximum heart rate achieved
+
+#### exang: exercise induced angina (1 = yes; 0 = no) 
+
+#### oldpeak: ST depression induced by exercise relative to rest 
+
+#### slope: the slope of the peak exercise ST segment 
+
+#### -- Value 1: upsloping 
+
+#### -- Value 2: flat 
+
+#### -- Value 3: downsloping 
+
+#### ca: number of major vessels (0-3) colored by flourosopy 
+
+#### thal: 3 = normal; 6 = fixed defect; 7 = reversable defect 
+
+#### num: diagnosis of heart disease (angiographic disease status) 
+
+#### -- Value 0: < 50% diameter narrowing 
+
+#### -- Value 1: > 50% diameter narrowing
+
+class(Heart$num)
+
+#### There are some empty featured in both the "thal" and"cp" columns. They're listed as "?". I'm going to remove those patient records from the data so the K-NN algorithm can run.
+
+Heart[Heart == "?"] <- NA
+
+Heart <- na.omit(Heart)
+
+sum(is.na(Heart))
+
+#### Because num is the outcome we want the algorithm to predict, we must change it to factor. The num variable is coded as
+
+#### 0 - disease free, and then 1, 2, 3, and 4 being different degrees of severity of heart disease. We're only interested in predicting whether or not a patient has the disease or not, so our "dummy variables" will be:
+
+#### 0 = No Disease
+
+#### 1 = Disease
+
+#### I''ll first change the "num" integer variables "2", "3", and "4" to "1", so only "0" and "1" variables remain.
+
+Heart$num[Heart$num=="4"] <- "1"
+
+Heart$num[Heart$num=="3"] <- "1"
+
+Heart$num[Heart$num=="2"] <- "1"
+
+#### Next I'll change the "num" variable to a factor
+
+
+Heart$num <- as.factor(Heart$num)
+
+class(Heart$num)
+
+head(Heart$num)
+
+
+round(prop.table(table(Heart$num)) * 100, digits = 1)
+
+#### As shown above, our data set includes 45.9% with heart disease and 54.1% without heart disease.
+
+#### We also need to convert "thal" and "ca" to number variables, because K-NN requires all variables besides the predictor variable to be numeric.
+
+Heart$thal <- as.character(Heart$thal)
+
+Heart$thal <- as.numeric(Heart$thal)
+
+str(Heart)
+
+
+Heart$ca <- as.character(Heart$ca)
+
+Heart$ca <- as.numeric(Heart$ca)
+
+str(Heart)
+
+
+#### We now need to normalize the data so the KNN vector isn't improperly influenced by differing measurements and lengths. I'll first create a normalize function, test it, and then apply it to the data.
+
+normalize <- function(x) {
+
+  return ((x - min(x)) / (max(x) - min(x)))
+  
+}
+
+normalize(c(1,2,3,4,5))
+
+normalize(c(10, 20, 30, 40, 50))
+
+#### As shown above, the function appears to be working correctly - the second set is exactly 10x greater than the first, but after normalization they both output the same values.
+
+#### I'll now normalize all the numeric features in the data frame.
+
+Heart[1:13] <- as.data.frame(lapply(Heart[1:13], normalize))
+
+summary(Heart_n$chol)
+
+#### As seen above, cholestoral which used to have a min of 126 and a max of 564, now has values ranging between 0 and 1.
+
+
+#### Split data into training and testing sets.
+
+
+ind <- sample(2, nrow(Heart), replace=TRUE, prob=c(0.7, 0.3))
+train <- Heart[ind==1,]
+test <- Heart[ind==2,]
+
+#### We've created "train", which is a random selection of 197 observations for training, and "test" which is a random selection of 100 observations for testing.
+### Now to test the model
+
+
+install.packages("class")
+
+library("class")
+
+pred <- knn(train = train[1:13], test = test[1:13], cl = train$num, k = 1)
+
+#### We now have an output of predicted disease for the test set of data. To evaluate the model we'll compare the predictions to the observations we have in the test data.
+
+library("gmodels")
+
+CrossTable(x = test$num, y = pred, prop.chisq = FALSE)
+
+#### As seen in the table, 78/100 cases were accurately predicted. This is a good start, but the model must improve if it is to be really used to diagnose patients. Mistakes in this domain are extremely consequential. 
+
+#### I'm now going to try to improve the model by making the k value 5.
+
+
+pred_2 <- knn(train = train[1:13], test = test[1:13], cl = train$num, k = 5)
+
+CrossTable(x = test$num, y = pred_2, prop.chisq = FALSE)
+
+#### This is a slight improvement. This model predicted 85/100 observations correctly. In the next model, I'm going to make k = 14. It's common to make the k value equal to the square root of the sum of the observations in the training set - the square root of 197 is approx. 14.
+
+pred_3 <- knn(train = train[1:13], test = test[1:13], cl = train$num, k = 14)
+
+CrossTable(x = test$num, y = pred_3, prop.chisq = FALSE)
+
+#### This model is slightly worse - 84/100 correctly chosen. I'm now going to try one more vlaue: k = 10.
+
+pred_4 <- knn(train = train[1:13], test = test[1:13], cl = train$num, k = 10)
+
+CrossTable(x = test$num, y = pred_4, prop.chisq = FALSE)
+
+
+#### This model predicted 81/100 observations correctly. Of the models I attempted, "pred_2" was most effective with k = 5. It's still not accurate enough to use to diagnose heart disease. Some ideas for further improving the model might be to use a larger training set - more data would certainly help. KNN might not be the optimal machine learning method for this problem.
